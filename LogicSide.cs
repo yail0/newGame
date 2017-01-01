@@ -190,9 +190,9 @@ public class LogicalTable
 
 			color = _colorsOverThreeCells[Random.Range(0, _colorsOverThreeCells.Count)];
 
-		}
+            _colorQtt[color] -= 3;
 
-		_colorQtt[color] -= 3;
+        }
 
 		_table[y, x] = new LogicalCell(color);
 
