@@ -15,9 +15,12 @@ public enum CellBoomType
 }
 public enum Explosion
 {
-	FOUR,
-	FIVE,
-	OVERSIX,
+	HORZFOUR,
+	HORZFIVE,
+	HORZOVERSIX,
+	VERTFOUR,
+	VERTFIVE,
+	VERTOVERSIX,
 	CROSS,
 
 }// TODO: xml 같은 거로 빼자
@@ -28,6 +31,7 @@ public class LogicalCell
 	private CellBoomType _BoomType;
 	private bool _matchability;
 	private bool _willExplode;
+	private int _originalY; // 0이면 떨어지지 않는 상태, -1이면 화면 밖에서부터 떨어지는 상태
 
 	public LogicalCell(int color = -1, CellBoomType BoomType = CellBoomType.NORMAL)
 	{
@@ -35,17 +39,25 @@ public class LogicalCell
 		_BoomType = BoomType;
 		_matchability = false;
 		_willExplode = false;
+		_originalY = 0;
 
 	}
 
 	public int GetColor() { return _nCellColor; }
 	public void SetColor(int color) { _nCellColor = color; }
+
 	public CellBoomType GetBoomType() { return _BoomType; }
 	public void SetBoomType(CellBoomType BoomType) { _BoomType = BoomType; }
+
 	public bool GetMatchability() { return _matchability; }
 	public void SetMatchability(bool matchability) { _matchability = matchability; }
+
 	public bool GetWillExplode() { return _willExplode; }
 	public void SetWillExplode(bool boom) { _willExplode = boom; }
+
+	// 0이면 떨어지지 않는 상태, -1이면 화면 밖에서부터 떨어지는 상태
+	public int GetOriginalY() { return _originalY; }
+	public void SetOriginalY(int y) { _originalY = y; }
 
 }
 
@@ -59,6 +71,7 @@ public class LogicalTable
 
 	private LogicalCell[,] _table;
 	private int[] _colorQtt;
+	private List<int> _colorList;
 
 	private class ExplodingInfo
 	{
@@ -81,8 +94,7 @@ public class LogicalTable
 		_nHeight = height;
 		_nColorMax = colorMax;
 		_nMatchableCellMin = matchableCellMin;
-
-		_table = new LogicalCell[_nWidth, _nHeight];
+		
 		_colorQtt = new int[_nColorMax];
 
 		_expInfo = new Queue<ExplodingInfo>();
@@ -95,14 +107,32 @@ public class LogicalTable
 	#region 색깔 세팅
 	public bool FillTable(bool isInitState = false)
 	{
-		if (_table == null)
+		int i, j;
+
+		if (!isInitState)
 		{
-			return false;
+			_colorQtt.Initialize();
+			_colorList.Clear();
+
+			for (i = 0; i < _nHeight; ++i)
+			{
+				for (j = 0; j < _nWidth; ++j)
+				{
+					int color = GetColor(i, j);
+					if (color >= 0)
+					{
+						++_colorQtt[color];
+						_colorList.Add(color);
+
+					}
+				}
+			}
 		}
 
-		if (isInitState)
+		bool isFillable = true;
+		do
 		{
-			int i, j;
+			_table = new LogicalCell[_nWidth, _nHeight];
 
 			for (int n = 0; n < _nMatchableCellMin; ++n)
 			{
@@ -111,30 +141,32 @@ public class LogicalTable
 					i = Random.Range(1, _nHeight - 1);
 					j = Random.Range(1, _nWidth - 1);
 
-				} while (!MakeMatchableCell(i, j, true));
+				} while (!MakeMatchableCellAt(i, j, isInitState));
 
 			}
 
-			for (i = 0; i < _nHeight; ++i)
+			for (i = 0; i < _nHeight && isFillable; ++i)
 			{
-				for (j = 0; j < _nWidth; ++j)
+				for (j = 0; j < _nWidth && isFillable; ++j)
 				{
 					if (_table[i, j] == null)
 					{
-						RandColor(i, j, true);
+						isFillable &= RandColor(i, j, isInitState, !isInitState);
+						_table[i, j].SetOriginalY(-1);
 					}
 				}
 			}
 
-			ChkMatchability();
+			// 만약 어떻게 해도 채울 수 없는 셀이 존재하는 경우 다시 처음부터.
+		} while (!isFillable);
 
-		}
+		ChkMatchability();
 
 		return true;
 
 	}
 
-	public bool MakeMatchableCell(int y, int x, bool isInitState)
+	public bool MakeMatchableCellAt(int y, int x, bool isInitState)
 	{
 		int i, j;
 
@@ -169,9 +201,13 @@ public class LogicalTable
 
 			color = _colorsOverThreeCells[Random.Range(0, _colorsOverThreeCells.Count)];
 
-		}
+			_colorQtt[color] -= 3;
 
-		_colorQtt[color] -= 3;
+			_colorList.Remove(color);
+			_colorList.Remove(color);
+			_colorList.Remove(color);
+
+		}
 
 		_table[y, x] = new LogicalCell(color);
 
@@ -187,66 +223,71 @@ public class LogicalTable
 		switch (Random.Range(0, 12))
 		{
 			case 0:
-				_table[y + 1, x - 1] = new LogicalCell(color);
-				_table[y, x + 1] = new LogicalCell(color);
+				_table[y + 1, x - 1]	= new LogicalCell(color);
+				_table[y, x + 1]		= new LogicalCell(color);
 				break;
 			case 1:
-				_table[y - 1, x - 1] = new LogicalCell(color);
-				_table[y, x + 1] = new LogicalCell(color);
+				_table[y - 1, x - 1]	= new LogicalCell(color);
+				_table[y, x + 1]		= new LogicalCell(color);
 				break;
 			case 2:
-				_table[y, x - 1] = new LogicalCell(color);
-				_table[y + 1, x + 1] = new LogicalCell(color);
+				_table[y, x - 1]		= new LogicalCell(color);
+				_table[y + 1, x + 1]	= new LogicalCell(color);
 				break;
 			case 3:
-				_table[y, x - 1] = new LogicalCell(color);
-				_table[y - 1, x + 1] = new LogicalCell(color);
+				_table[y, x - 1]		= new LogicalCell(color);
+				_table[y - 1, x + 1]	= new LogicalCell(color);
 				break;
 			case 4:
-				_table[y + 1, x - 1] = new LogicalCell(color);
-				_table[y + 1, x + 1] = new LogicalCell(color);
+				_table[y + 1, x - 1]	= new LogicalCell(color);
+				_table[y + 1, x + 1]	= new LogicalCell(color);
 				break;
 			case 5:
-				_table[y - 1, x - 1] = new LogicalCell(color);
-				_table[y - 1, x + 1] = new LogicalCell(color);
+				_table[y - 1, x - 1]	= new LogicalCell(color);
+				_table[y - 1, x + 1]	= new LogicalCell(color);
 				break;
 			case 6:
-				_table[y - 1, x - 1] = new LogicalCell(color);
-				_table[y + 1, x] = new LogicalCell(color);
+				_table[y - 1, x - 1]	= new LogicalCell(color);
+				_table[y + 1, x]		= new LogicalCell(color);
 				break;
 			case 7:
-				_table[y - 1, x + 1] = new LogicalCell(color);
-				_table[y + 1, x] = new LogicalCell(color);
+				_table[y - 1, x + 1]	= new LogicalCell(color);
+				_table[y + 1, x]		= new LogicalCell(color);
 				break;
 			case 8:
-				_table[y - 1, x] = new LogicalCell(color);
-				_table[y + 1, x - 1] = new LogicalCell(color);
+				_table[y - 1, x]		= new LogicalCell(color);
+				_table[y + 1, x - 1]	= new LogicalCell(color);
 				break;
 			case 9:
-				_table[y - 1, x] = new LogicalCell(color);
-				_table[y + 1, x + 1] = new LogicalCell(color);
+				_table[y - 1, x]		= new LogicalCell(color);
+				_table[y + 1, x + 1]	= new LogicalCell(color);
 				break;
 			case 10:
-				_table[y - 1, x - 1] = new LogicalCell(color);
-				_table[y + 1, x - 1] = new LogicalCell(color);
+				_table[y - 1, x - 1]	= new LogicalCell(color);
+				_table[y + 1, x - 1]	= new LogicalCell(color);
 				break;
 			case 11:
-				_table[y - 1, x + 1] = new LogicalCell(color);
-				_table[y + 1, x + 1] = new LogicalCell(color);
+				_table[y - 1, x + 1]	= new LogicalCell(color);
+				_table[y + 1, x + 1]	= new LogicalCell(color);
 				break;
 		}
 
 		return true;
 	}
 
-	public void RandColor(int i, int j, bool isInitState = false)
+	public bool RandColor(int i, int j, bool isInitState = false, bool isShuffling = false)
 	{
-		if (!isInitState)
+		int color = Random.Range(0, _nColorMax);
+
+		if (!isInitState && !isShuffling)
 		{
-			_table[i, j] = new LogicalCell(Random.Range(0, _nColorMax));
-			return;
+			// 새 셀이 필요한 경우: 아무 색이나 가져와도 됨.
+			_table[i, j] = new LogicalCell(color);
+
+			return true;
 		}
 
+		// 테이블 초기화 단계: 자동으로 터지는 셀이 없어야 함.
 		int upCellColor = GetColor(i + 1, j);
 		int downCellColor = GetColor(i - 1, j);
 		int leftCellColor = GetColor(i, j - 1);
@@ -267,8 +308,18 @@ public class LogicalTable
 			&& !areHorizTwoCellsSame
 			&& !areVertTwoCellsSame)
 		{
-			_table[i, j] = new LogicalCell(Random.Range(0, _nColorMax));
-			return;
+			if (isShuffling)
+			{
+				int index = Random.Range(0, _colorList.Count);
+				color = _colorList[index];
+
+				--_colorQtt[color];
+				_colorList.RemoveAt(index);
+			}
+
+			_table[i, j] = new LogicalCell(color);
+
+			return true;
 		}
 
 		List<int> colorList = new List<int>();
@@ -282,18 +333,65 @@ public class LogicalTable
 				continue;
 			}
 
+			if (isShuffling)
+			{
+				if (_colorQtt[k] <= 0)
+				{
+					continue;
+				}
+
+				--_colorQtt[k];
+				_colorList.Remove(k);
+
+			}
+
 			colorList.Add(k);
+
+		}
+
+		if (colorList.Count <= 0)
+		{
+			return false;
 		}
 
 		_table[i, j] = new LogicalCell(colorList[Random.Range(0, colorList.Count)]);
 
-		return;
+		return true;
 
 	}
 	#endregion
 
 	#region 체크
-	public bool ChkGravity()
+	public void ChkProcess()
+	{
+		while (ChkExplosion())
+		{
+			// TODO: 그래픽 출력
+
+			while (_expInfo.Count > 0)
+			{
+				ExplodingInfo info = _expInfo.Dequeue();
+				// TODO: 제거 경우에 따라
+			}
+
+			for (int i = 0; i < _nHeight; ++i)
+			{
+				for (int j = 0; j < _nWidth; ++j)
+				{
+					if (_table[i, j].GetWillExplode())
+					{
+						_table[i, j] = null;
+					}
+				}
+			}
+
+			ChkFalling();
+
+		}
+
+	}
+
+	public bool ChkFalling()
 	{
 		bool hasFallingCell = false;
 
@@ -303,6 +401,8 @@ public class LogicalTable
 			{
 				if (GetColor(i, j) < 0)
 				{
+					hasFallingCell = true;
+
 					int k = i;
 					while (++k < _nHeight && GetColor(k, j) < 0)
 					{
@@ -310,45 +410,82 @@ public class LogicalTable
 
 					if (k < _nHeight)
 					{
-						LogicalCell tempCell = _table[i, j];
 						_table[i, j] = _table[k, j];
-						_table[k, j] = tempCell;
+						_table[i, j].SetOriginalY(k);
+						_table[k, j] = null;
+
 					}
 				}
 			}
 		}
 
-		// TODO: 낙하 플래그 추가, RandColor로 위쪽 빈 자리 채우기
+		for (int i = 0; i < _nHeight; ++i)
+		{
+			for (int j = 0; j < _nWidth; ++j)
+			{
+				if (GetColor(i, j) < 0)
+				{
+					RandColor(i, j);
+					_table[i, j].SetOriginalY(-1);
+				}
+			}
+		}
 
 		return hasFallingCell;
 	}
-	public bool ChkExplosion(int y, int x)
+
+	public bool ChkExplosion()
+	{
+		bool willExplode = false;
+		for (int i = 0; i < _nHeight; ++i)
+		{
+			for (int j = 0; j < _nWidth; ++j)
+			{
+				if (_table[i, j].GetWillExplode())
+				{
+					continue;
+				}
+
+				willExplode |= ChkExplosionOfCell(i, j);
+
+			}
+
+		}
+
+		return willExplode;
+	}
+	public bool ChkExplosionOfCell(int y, int x)
 	{
 		int color = GetColor(y, x);
+
+		if (color < 0)
+		{
+			return false;
+		}
 
 		int vertMatch = 1;
 		int horzMatch = 1;
 
 		// 세로에 몇 개가 매칭되었나 확인
 		int i = y;
-		while (++i < _nHeight && GetColor(i, x) == color)
+		while (GetColor(++i, x) == color)
 		{
 			++vertMatch;
 		}
 		i = y;
-		while (--i >= 0 && GetColor(i, x) == color)
+		while (GetColor(--i, x) == color)
 		{
 			++vertMatch;
 		}
 
 		// 가로에 몇 개가 매칭되었나 확인
 		int j = x;
-		while (++j < _nWidth && GetColor(y, j) == color)
+		while (GetColor(y, ++j) == color)
 		{
 			++horzMatch;
 		}
 		j = x;
-		while (--j >= 0 && GetColor(y, j) == color)
+		while (GetColor(y, --j) == color)
 		{
 			++horzMatch;
 		}
@@ -363,13 +500,12 @@ public class LogicalTable
 		if (vertMatch >= 3)
 		{
 			i = y;
-			while (++i < _nHeight && GetColor(i, x) == color)
+			while (GetColor(++i, x) == color)
 			{
 				_table[i, x].SetWillExplode(true);
 			}
-
 			i = y;
-			while (--i >= 0 && GetColor(i, x) == color)
+			while (GetColor(--i, x) == color)
 			{
 				_table[i, x].SetWillExplode(true);
 			}
@@ -377,13 +513,12 @@ public class LogicalTable
 		if (horzMatch >= 3)
 		{
 			j = x;
-			while (++j < _nWidth && GetColor(y, j) == color)
+			while (GetColor(y, ++j) == color)
 			{
 				_table[y, j].SetWillExplode(true);
 			}
-
 			j = x;
-			while (--j >= 0 && GetColor(y, j) == color)
+			while (GetColor(y, --j) == color)
 			{
 				_table[y, j].SetWillExplode(true);
 			}
@@ -397,28 +532,28 @@ public class LogicalTable
 
 		if (horzMatch >= 6)
 		{
-			_expInfo.Enqueue(new ExplodingInfo(y, x, Explosion.OVERSIX));
+			_expInfo.Enqueue(new ExplodingInfo(y, x, Explosion.HORZOVERSIX));
 		}
-		else if (horzMatch >= 5)
+		else if (horzMatch == 5)
 		{
-			_expInfo.Enqueue(new ExplodingInfo(y, x, Explosion.FIVE));
+			_expInfo.Enqueue(new ExplodingInfo(y, x, Explosion.HORZFIVE));
 		}
-		else if (horzMatch >= 4)
+		else if (horzMatch == 4)
 		{
-			_expInfo.Enqueue(new ExplodingInfo(y, x, Explosion.FOUR));
+			_expInfo.Enqueue(new ExplodingInfo(y, x, Explosion.HORZFOUR));
 		}
 
 		if (vertMatch >= 6)
 		{
-			_expInfo.Enqueue(new ExplodingInfo(y, x, Explosion.OVERSIX));
+			_expInfo.Enqueue(new ExplodingInfo(y, x, Explosion.VERTOVERSIX));
 		}
-		else if (vertMatch >= 5)
+		else if (vertMatch == 5)
 		{
-			_expInfo.Enqueue(new ExplodingInfo(y, x, Explosion.FIVE));
+			_expInfo.Enqueue(new ExplodingInfo(y, x, Explosion.VERTFIVE));
 		}
-		else if (vertMatch >= 4)
+		else if (vertMatch == 4)
 		{
-			_expInfo.Enqueue(new ExplodingInfo(y, x, Explosion.FOUR));
+			_expInfo.Enqueue(new ExplodingInfo(y, x, Explosion.VERTFOUR));
 		}
 
 		return true;
@@ -441,10 +576,10 @@ public class LogicalTable
 
 				_table[i, j].SetColor(-1);
 
-				if (ChkMatchabilityOfColor(i - 1, j, color)
-					|| ChkMatchabilityOfColor(i + 1, j, color)
-					|| ChkMatchabilityOfColor(i, j - 1, color)
-					|| ChkMatchabilityOfColor(i, j + 1, color))
+				if (ChkMatchabilityOfCellNColor(i - 1, j, color)
+					|| ChkMatchabilityOfCellNColor(i + 1, j, color)
+					|| ChkMatchabilityOfCellNColor(i, j - 1, color)
+					|| ChkMatchabilityOfCellNColor(i, j + 1, color))
 				{
 					matchability = true;
 					hasMatchableCell = true;
@@ -453,13 +588,13 @@ public class LogicalTable
 				_table[i, j].SetColor(color);
 
 				_table[i, j].SetMatchability(matchability);
+
 			}
 		}
 
 		return hasMatchableCell;
 	}
-
-	private bool ChkMatchabilityOfColor(int y, int x, int color)
+	private bool ChkMatchabilityOfCellNColor(int y, int x, int color)
 	{
 		if ((GetColor(y - 2, x) == GetColor(y - 1, x) && GetColor(y - 2, x) == color)
 			|| (GetColor(y - 1, x) == GetColor(y + 1, x) && GetColor(y - 1, x) == color)
@@ -480,7 +615,7 @@ public class LogicalTable
 	{
 		if (y < 0 || y >= _nHeight || x < 0 || x >= _nWidth || _table[y, x] == null)
 		{
-			return 0;
+			return -1;
 		}
 
 		return _table[y, x].GetColor();
@@ -511,10 +646,10 @@ public class LogicSide : MonoBehaviour
 {
 	public static LogicSide instance = null;
 
-	public int _nTableWidth = 8;                // 가로 셀 갯수
-	public int _nTableHeight = 8;           // 세로 셀 갯수
-	public int _nCellColorMax = 6;          // 셀 종류
-	public int _nMatchableCellMin = 2;      // 뒤섞거나 처음으로 세팅할 때 최소한으로 필요한 매치 가능 셀의 수
+	public int _nTableWidth = 8;				// 가로 셀 갯수
+	public int _nTableHeight = 8;			// 세로 셀 갯수
+	public int _nCellColorMax = 6;			// 셀 종류
+	public int _nMatchableCellMin = 2;		// 뒤섞거나 처음으로 세팅할 때 최소한으로 필요한 매치 가능 셀의 수
 
 	public LogicalTable _mainTable; // 테이블
 
