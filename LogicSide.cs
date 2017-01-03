@@ -655,6 +655,8 @@ public class LogicSide : MonoBehaviour
 
 	private string _tableState;
 
+	public Table _graphicTable;
+
 	// Use this for initialization
 	void Start()
 	{
@@ -668,6 +670,11 @@ public class LogicSide : MonoBehaviour
 	void Update()
 	{
 		_tableState = "";
+		
+		if (_mainTable == null)
+		{
+			return;
+		}
 
 		for (int i = _nTableHeight - 1; i >= 0; --i)
 		{
@@ -677,6 +684,12 @@ public class LogicSide : MonoBehaviour
 				_tableState += (matchability ? " <color=\"red\">" : " ")
 									+ _mainTable.GetColor(i, j).ToString()
 									+ (matchability ? "</color>" : "");
+
+				if (_graphicTable != null && _graphicTable._table != null && _graphicTable._table[i, j] != null)
+				{
+					_graphicTable._table[i, j].SetColor(_mainTable.GetColor(i, j), _nCellColorMax);
+				}
+
 			}
 			_tableState += "\n";
 
@@ -686,8 +699,8 @@ public class LogicSide : MonoBehaviour
 
 	private void OnGUI()
 	{
-		GUI.skin.label.fontSize = 50;
-		GUILayout.Label(_tableState);
+		//GUI.skin.label.fontSize = 50;
+		//GUILayout.Label(_tableState);
 	}
 
 }
