@@ -17,32 +17,51 @@ public class Cell : MonoBehaviour
 	public float _fColorMax;
 	public float _fColorMin;
 
-	private bool _isColorSet;
-
 	private Vector3 _pressedPosition;
 	private Vector3 _originPosition;
 
 	private bool _isSelected;
+
+	public int _nCellY = -1;
+	public int _nCellX = -1;
+	public float _fThreshold = 0.05f;
 	
 	void OnDrag()
 	{
 		Vector3 mousePosition = new Vector3(Input.mousePosition.x, Input.mousePosition.y, 0);
 		Vector3 objPosition = UICamera.mainCamera.ScreenToWorldPoint(mousePosition);
-		Vector3 deltaPosition = objPosition - _originPosition;
-		Vector3 pressedPositionAxis = _pressedPosition;
+		Vector3 deltaPosition = objPosition - _pressedPosition;
+		float deltaY = 0.0f, deltaX = 0.0f;
 
 		if (deltaPosition.y * deltaPosition.y > deltaPosition.x * deltaPosition.x)
 		{
 			deltaPosition.x = 0;
-			pressedPositionAxis.x = 0;
+			deltaY = deltaPosition.y;
 		}
 		else
 		{
 			deltaPosition.y = 0;
-			pressedPositionAxis.y = 0;
+			deltaX = deltaPosition.x;
 		}
 
-		transform.position = _originPosition + deltaPosition + pressedPositionAxis;
+		//transform.position = _originPosition + deltaPosition;
+		
+		if (deltaY > _fThreshold)
+		{
+			Table.instance.MoveCell(_nCellY, _nCellX, 0);
+		}
+		else if (deltaY < -_fThreshold)
+		{
+			Table.instance.MoveCell(_nCellY, _nCellX, 2);
+		}
+		else if (deltaX > _fThreshold)
+		{
+			Table.instance.MoveCell(_nCellY, _nCellX, 1);
+		}
+		else if (deltaX < -_fThreshold)
+		{
+			Table.instance.MoveCell(_nCellY, _nCellX, 3);
+		}
 
 	}
 	void OnDragEnd()
@@ -50,16 +69,19 @@ public class Cell : MonoBehaviour
 		transform.position = _originPosition;
 
 	}
+	void OnPress()
+	{
+		Vector3 mousePosition = new Vector3(Input.mousePosition.x, Input.mousePosition.y, 0);
+		Vector3 objPosition = UICamera.mainCamera.ScreenToWorldPoint(mousePosition);
+
+		_pressedPosition = objPosition;
+		_originPosition = transform.position;
+
+	}
 	void OnSelect(bool selected)
 	{
 		if (selected)
 		{
-			Vector3 mousePosition = new Vector3(Input.mousePosition.x, Input.mousePosition.y, 0);
-			Vector3 objPosition = UICamera.mainCamera.ScreenToWorldPoint(mousePosition);
-
-			_pressedPosition = transform.position - objPosition;
-			_originPosition = transform.position;
-
 			_sprite.depth += 2;
 			_label.depth += 2;
 
@@ -112,25 +134,17 @@ public class Cell : MonoBehaviour
 	// Use this for initialization
 	void Start()
 	{
-		_fColorDiff = (_fColorMax - _fColorMin);
 	}
 
 	// Update is called once per frame
 	void Update()
 	{
 		//_nAnimatingFrame = (int)(_nAnimatingSecond / Time.deltaTime);
-
-		if (!_isColorSet)
-		{
-			SetColor(_nColor, LogicSide.instance._nCellColorMax);
-		}
 	}
 
-	public void SetColor(int colorCurrent, int colorMax)
+	public void SetColor(int colorIndex, int colorMax)
 	{
-		_nColor = colorCurrent;
-
-		if (_nColor < 0)
+		if (colorIndex < 0 || colorMax == 0)
 		{
 			_sprite.color = new Color(1.0f, 1.0f, 1.0f, 1.0f);
 			_label.color = _sprite.color;
@@ -139,15 +153,12 @@ public class Cell : MonoBehaviour
 			return;
 		}
 
+		_nColor = colorIndex;
 		_nColorMax = colorMax;
-
-		if (_nColorMax == 0)
-		{
-			return;
-		}
 
 		float concentration = (float)_nColor / (_nColorMax - 1);
 		Color tint = new Color();
+		_fColorDiff = (_fColorMax - _fColorMin);
 
 		if (concentration < 0.5f)
 		{
@@ -176,8 +187,6 @@ public class Cell : MonoBehaviour
 
 		_label.color = tint;
 		_label.text = (_nColor + 1).ToString();
-
-		_isColorSet = true;
 
 	}
 	public void SetText(string text)

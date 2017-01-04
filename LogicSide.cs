@@ -112,7 +112,15 @@ public class LogicalTable
 		if (!isInitState)
 		{
 			_colorQtt.Initialize();
-			_colorList.Clear();
+
+			if (_colorList == null)
+			{
+				_colorList = new List<int>();
+			}
+			else
+			{
+				_colorList.Clear();
+			}
 
 			for (i = 0; i < _nHeight; ++i)
 			{
@@ -351,6 +359,8 @@ public class LogicalTable
 
 		if (colorList.Count <= 0)
 		{
+			_table[i, j] = new LogicalCell();
+
 			return false;
 		}
 
@@ -361,18 +371,52 @@ public class LogicalTable
 	}
 	#endregion
 
+	public bool ChangeCell(int fromY, int fromX, int toY, int toX)
+	{
+		int fromColor = GetColor(fromY, fromX);
+		int toColor = GetColor(toY, toX);
+
+		if (fromColor < 0 || toColor < 0)
+		{
+			return false;
+		}
+
+		_table[fromY, fromX].SetColor(-1);
+		_table[toY, toX].SetColor(-1);
+
+		if (!ChkMatchabilityOfCellNColor(toY, toX, fromColor) && !ChkMatchabilityOfCellNColor(fromY, fromX, toColor))
+		{
+			_table[fromY, fromX].SetColor(fromColor);
+			_table[toY, toX].SetColor(toColor);
+
+			return false;
+		}
+
+		_table[fromY, fromX].SetColor(fromColor);
+		_table[toY, toX].SetColor(toColor);
+
+		LogicalCell tempCell = _table[fromY, fromX];
+		_table[fromY, fromX] = _table[toY, toX];
+		_table[toY, toX] = tempCell;
+
+		return true;
+	}
+
 	#region 체크
 	public void ChkProcess()
 	{
+		int index = 0;
 		while (ChkExplosion())
 		{
-			// TODO: 그래픽 출력
-
 			while (_expInfo.Count > 0)
 			{
 				ExplodingInfo info = _expInfo.Dequeue();
 				// TODO: 제거 경우에 따라
 			}
+
+			int explodedNo = 0;
+
+			string tableText = "";
 
 			for (int i = 0; i < _nHeight; ++i)
 			{
@@ -380,13 +424,28 @@ public class LogicalTable
 				{
 					if (_table[i, j].GetWillExplode())
 					{
+						tableText += ". ";
 						_table[i, j] = null;
+						++explodedNo;
 					}
+					else
+						tableText += GetColor(i, j).ToString() + " ";
+
 				}
+				tableText += "\n";
 			}
+			
+			Debug.Log(string.Format("{0}: {1}", index++, explodedNo));
+			Debug.Log(tableText);
 
 			ChkFalling();
 
+		}
+
+		if (!ChkMatchability())
+		{
+			Debug.Log("섞");
+			FillTable();
 		}
 
 	}
@@ -499,6 +558,8 @@ public class LogicalTable
 		// 매칭된 것들을 제거하기 위해 플래그를 true
 		if (vertMatch >= 3)
 		{
+			_table[y, x].SetWillExplode(true);
+
 			i = y;
 			while (GetColor(++i, x) == color)
 			{
@@ -512,6 +573,8 @@ public class LogicalTable
 		}
 		if (horzMatch >= 3)
 		{
+			_table[y, x].SetWillExplode(true);
+
 			j = x;
 			while (GetColor(y, ++j) == color)
 			{
@@ -594,14 +657,24 @@ public class LogicalTable
 
 		return hasMatchableCell;
 	}
-	private bool ChkMatchabilityOfCellNColor(int y, int x, int color)
+	public bool ChkMatchabilityOfCellNColor(int y, int x, int color)
 	{
-		if ((GetColor(y - 2, x) == GetColor(y - 1, x) && GetColor(y - 2, x) == color)
-			|| (GetColor(y - 1, x) == GetColor(y + 1, x) && GetColor(y - 1, x) == color)
-			|| (GetColor(y + 1, x) == GetColor(y + 2, x) && GetColor(y + 1, x) == color)
-			|| (GetColor(y, x - 2) == GetColor(y, x - 1) && GetColor(y, x - 2) == color)
-			|| (GetColor(y, x - 1) == GetColor(y, x + 1) && GetColor(y, x - 1) == color)
-			|| (GetColor(y, x + 1) == GetColor(y, x + 2) && GetColor(y, x + 1) == color))
+		int nDownDownColor = GetColor(y - 2, x);
+		int nDownColor = GetColor(y - 1, x);
+		int nUpColor = GetColor(y + 1, x);
+		int nUpUpColor = GetColor(y + 2, x);
+
+		int nLeftLeftColor = GetColor(y, x - 2);
+		int nLeftColor = GetColor(y, x - 1);
+		int nRightColor = GetColor(y, x + 1);
+		int nRightRightColor = GetColor(y, x + 2);
+
+		if ((nDownDownColor == nDownColor && nDownColor == color)
+			|| (nDownColor == nUpColor && nUpColor == color)
+			|| (nUpColor == nUpUpColor && nUpColor == color)
+			|| (nLeftLeftColor == nLeftColor && nLeftColor == color)
+			|| (nLeftColor == nRightColor && nRightColor == color)
+			|| (nRightColor == nRightRightColor && nRightColor == color))
 		{
 			return true;
 		}
@@ -653,9 +726,7 @@ public class LogicSide : MonoBehaviour
 
 	public LogicalTable _mainTable; // 테이블
 
-	private string _tableState;
-
-	public Table _graphicTable;
+	private bool _isGraphicTableInitiated = false;
 
 	// Use this for initialization
 	void Start()
@@ -668,39 +739,26 @@ public class LogicSide : MonoBehaviour
 
 	// Update is called once per frame
 	void Update()
-	{
-		_tableState = "";
-		
+	{		
 		if (_mainTable == null)
 		{
 			return;
 		}
 
-		for (int i = _nTableHeight - 1; i >= 0; --i)
-		{
-			for (int j = 0; j < _nTableWidth; ++j)
-			{
-				bool matchability = _mainTable.GetMatchability(i, j);
-				_tableState += (matchability ? " <color=\"red\">" : " ")
-									+ _mainTable.GetColor(i, j).ToString()
-									+ (matchability ? "</color>" : "");
-
-				if (_graphicTable != null && _graphicTable._table != null && _graphicTable._table[i, j] != null)
-				{
-					_graphicTable._table[i, j].SetColor(_mainTable.GetColor(i, j), _nCellColorMax);
-				}
-
-			}
-			_tableState += "\n";
-
-		}
-
 	}
 
-	private void OnGUI()
+	public bool ChangeCell(int fromY, int fromX, int toY, int toX)
 	{
-		//GUI.skin.label.fontSize = 50;
-		//GUILayout.Label(_tableState);
+		if (!_mainTable.ChangeCell(fromY, fromX, toY, toX))
+		{
+			return false;
+		}
+
+		_mainTable.ChkProcess();
+
+		Table.instance._canControl = true;
+
+		return true;
 	}
 
 }
